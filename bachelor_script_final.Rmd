@@ -1,0 +1,334 @@
+---
+title: "bachelor_script_final"
+output: html_document
+date: "2023-05-28"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(stringr)
+library(tidyverse)
+library(haven)
+library(ggplot2)
+library(lubridate)
+library(readr)
+library(dplyr)
+library(knitr)
+library(rvest)
+library(tidyr)
+library(kableExtra)
+library(ggrepel)
+library(magrittr)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+setwd("~/Library/Mobile Documents/com~apple~CloudDocs/BACHELOROPPGAVEN")
+
+environment <- readxl::read_xls("infringements_export_2023-04-05.xls")
+```
+
+## How many environmental infringement preocedings per country?
+
+```{r}
+count <- environment %>%
+  group_by(Country) %>% 
+  summarise(number_of_cases = n()) %>% 
+  arrange(desc(number_of_cases))
+
+head(count)
+```
+
+##Is there a correlation between high GDP and fewer environmental infringement cases?
+
+Uploading GDP per capita data from the worldbank filtering for the most recent year: 2020 Obs: have to change Luxembourg to Luxemborg Then joining the two datasets to compare
+
+```{r}
+
+gdp <- read_csv("GDP_world_bank.csv", skip=3)
+head(gdp)
+gdp <- gdp %>%
+  select(`Country Name`, `Country Code`, `2021`) %>% 
+  rename("Country" = `Country Name`) %>% 
+  rename("GDP" =`2021`)
+
+gdp_inf <- gdp %>% 
+  left_join(count,
+    by= c("Country" = "Country")) %>% 
+  drop_na()
+
+
+
+ggplot(gdp_inf, aes(x =number_of_cases, y = GDP)) +
+  geom_point(color = "darkred") +
+  labs(title = "Does a higher GDP correlate to a lower number of\nenvironmental infringement proceedings?",
+       x = "environmental infringement proceedings",
+       y = "GDP (current US$)") +
+  theme_bw() +
+  geom_text_repel(aes(label = Country), size = 3)
+
+```
+
+
+
+
+## What about population size?
+
+```{r}
+population <- readxl::read_xlsx("population.xlsx", skip= 4)
+head(population)
+
+population <- population %>%
+  select(`Country Name`,`2021`) %>% 
+  rename("Country" = `Country Name`)
+
+
+population <- population %>% 
+  left_join(count,
+    by= c("Country" = "Country")) %>% 
+  drop_na()
+
+ggplot(population, aes(x =number_of_cases, y = `2021`)) +
+  geom_point(color = "darkgreen") +
+  labs(title = "Does less populated countries have less environmental\ninfringement proceedings?",
+       x = "environmental infringement proceedings",
+       y = "Population") +
+  theme_bw() +
+  geom_text_repel(aes(label = Country), size = 3)
+
+```
+# EU15
+
+```{r}
+#deleting rows
+pop2 <- population[-c(3:5, 9, 13:15, 18:21, 23, 25,27),]
+
+ggplot(pop2, aes(x =number_of_cases, y = `2021`)) +
+  geom_point(color = "darkgreen") +
+  labs(title = "EU15 Does less populated countries have less environmental\ninfringement proceedings?",
+       x = "environmental infringement proceedings",
+       y = "Population") +
+  theme_bw() +
+  geom_text_repel(aes(label = Country), size = 3)
+```
+
+
+#Linear Regression analysis
+
+```{r}
+# making a new dataset with number of cases and GDP and population data
+
+
+regression <- gdp_inf %>% 
+  left_join(population,
+    by= c("Country" = "Country"))
+
+
+# Regression analysis
+m1 <- lm(number_of_cases.x ~ GDP + `2021`, data = regression)
+summary(m1)
+
+
+
+tab_model(gdp_inf.lm)
+
+tab_model(
+  m1,
+  pred.labels = c("intercept", "GDP", "population"),
+  dv.labels = c("Environmental infringements"),
+  string.pred = "Coeffcient",
+  string.ci = "Conf. Int",
+  string.p = "P-Value",
+  digits.p= 4
+)
+
+```
+
+
+
+
+
+
+## CAPACITY (MANAGEMENT)
+
+#GDP per capita
+
+
+
+```{r}
+gdp2 <- read_csv("GDP_per_capita.csv", skip= 3)
+
+gdp2 <- readxl::read_xlsx("GDP_per_capita.xlsx", skip= 4)
+
+head(gdp2)
+gdp2 <- gdp2 %>%
+  select(`Country Name`,`2021`) %>% 
+  rename("Country" = `Country Name`) %>% 
+  rename(GDP_per_capita =`2021`)
+
+
+options(scipen=0)
+
+gdp_inf2 <- gdp2 %>% 
+  left_join(count,
+    by= c("Country" = "Country")) %>% 
+  drop_na()
+
+
+ggplot(gdp_inf2, aes(x =number_of_cases, y = GDP_per_capita)) +
+  geom_point(color = "darkblue") +
+  labs(title = "Does a higher GDP per capita correlate to a fewer\nenvironmental infringement proceedings?",
+       x = "environmental infringement proceedings",
+       y = "GDP per capita (current US$)") +
+  theme_bw() +
+  geom_text_repel(aes(label = Country), size = 3)
+
+
+```
+# Only EU15
+
+```{r}
+#deleting rows
+gdp_EU15 <- gdp_inf2[-c(3:5, 9, 14:15, 18:20, 22, 24,25),]
+
+
+ggplot(gdp_EU15, aes(x =number_of_cases, y = GDP_per_capita)) +
+  geom_point(color = "darkblue") +
+  labs(title = "EU15: Does a higher GDP per capita correlate to fewer\nenvironmental infringement proceedings?",
+       x = "environmental infringement proceedings",
+       y = "GDP per capita (current US$)") +
+  theme_bw() +
+  geom_text_repel(aes(label = Country), size = 3)
+
+
+```
+
+
+
+
+
+```{r}
+corruption <- readxl::read_xlsx("CPI2021_RegionalTables.xlsx", skip=2)
+
+corruption.eu <- corruption %>% 
+  filter(Region == "WE/EU") %>%
+  select(c(`Country / Territory`, ISO3, Region, `CPI score 2021`, Rank)) %>% 
+  rename("Country" = `Country / Territory`) %>% 
+  rename("CPI_score_2021" =`CPI score 2021`)
+
+corrupt_inf <- count %>% 
+  left_join(corruption.eu,
+            by= c("Country" = "Country"))
+
+
+ggplot(corrupt_inf, aes(x = number_of_cases, y = CPI_score_2021)) +
+  geom_point(color = "purple") +
+  labs(title = "Do less corruption in the government lead to fewer\nenvironmental infringement proceedings?",
+       x = "environmental infringement proceedings",
+       y = "Corruption index") +
+  geom_text_repel(aes(label = Country), size = 3) +
+  theme_bw()
+
+
+```
+
+
+# Only EU15
+
+```{r}
+#deleting rows
+corrupt_new <- corrupt_inf[-c(7,12:18,20:21,24,26:28),]
+
+
+ggplot(corrupt_new, aes(x = number_of_cases, y = CPI_score_2021)) +
+  geom_point(color = "purple") +
+  labs(title = "EU15: Do less corruption in the government lead to fewer\nenvironmental infringement proceedings?",
+       x = "environmental infringement proceedings",
+       y = "Corruption index") +
+  geom_text_repel(aes(label = Country), size = 3) +
+  theme_bw()
+
+```
+
+
+# without EU15
+```{r}
+corrupt_rest <- corrupt_inf[-c(1:6,8:11, 19, 22:23, 25),]
+
+
+ggplot(corrupt_rest, aes(x = number_of_cases, y = CPI_score_2021)) +
+  geom_point(color = "purple") +
+  labs(title = "Do less corruption in the government lead to fewer\nenvironmental infringement proceedings?",
+       x = "environmental infringement proceedings",
+       y = "Corruption index") +
+  geom_text_repel(aes(label = Country), size = 3) +
+  theme_bw()
+
+```
+
+
+# Government efficiency 
+
+```{r}
+wb <- read_csv("30a2e06a-f048-4872-a472-1be336a435d6_Data.csv") %>% 
+  drop_na()
+
+wb_inf <-wb %>% 
+  left_join(count,
+            by= c("Country Name" = "Country"))
+
+ggplot(wb_inf, aes(x = number_of_cases, y = `2021 [YR2021]`)) +
+  geom_point(color = "darkgreen") +
+  theme_bw() +
+  labs(title = "Do a more efficient government lead to fewer\nenvironmental infringement proceedings?",
+       x = "environmental infringement proceedings",
+       y = "Government efficiency index") +
+  geom_text_repel(aes(label = `Country Name`), size = 3)
+
+
+```
+
+# EU 15
+
+```{r}
+wb_15 <- wb_inf[-c(3,4,8,9,14,16,17,20,22,24:27),]
+
+
+ggplot(wb_15, aes(x = number_of_cases, y = `2021 [YR2021]`)) +
+  geom_point(color = "darkgreen") +
+  theme_bw() +
+  labs(title = "EU15: Do a more efficient government lead to fewer\nenvironmental infringement proceedings?",
+       x = "environmental infringement proceedings",
+       y = "Government efficiency index") +
+  geom_text_repel(aes(label = `Country Name`), size = 3)
+
+
+```
+
+# Regression analysis (capacity)
+
+```{r}
+corrupt.lm2 <- lm(number_of_cases ~ CPI_score_2021, data = corrupt_new)
+
+summary(corrupt.lm2)
+
+
+
+
+names(corrupt_inf)
+corrupt.lm <- lm(number_of_cases ~ CPI_score_2021, data = corrupt_inf)
+
+summary(corrupt.inf.lm)
+
+
+tab_model(
+  corrupt.lm2, corrupt.lm,
+  pred.labels = c("Intercept", "Corruption index", "Corruption index EU15"),
+  dv.labels = c("Number of environmental infringement proceedings", ""),
+  string.pred = "Coeffcient",
+  string.ci = "Conf. Int",
+  string.p = "P-Value"
+)
+```
+
+
+
